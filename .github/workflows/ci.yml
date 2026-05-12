@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  validate-public:
+    name: Validate public companion
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          fetch-depth: 1
+
+      - name: Mark workspace as safe
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@9280e7aca88deada44c930f1e2c78e21c3ae3edd
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - name: Evaluate flake checks
+        run: nix flake check path:$PWD
+
+      - name: Compile official docs tooling
+        run: nix develop path:$PWD --command python -m py_compile tools/official_docs/*.py
+
+      - name: Run public validation app
+        run: nix run path:$PWD#validate-public
+
+      - name: Run public negative validation
+        run: ./scripts/validate_public_negative.sh
